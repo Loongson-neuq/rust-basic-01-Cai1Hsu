@@ -1,8 +1,7 @@
 use core::str;
 use rand::Rng;
 use std::{
-    cmp::Ordering,
-    io::{stdout, Read, Write},
+    arch::asm, cmp::Ordering, io::{stdout, Read, Write}
 };
 
 pub enum GuessResult {
@@ -58,6 +57,27 @@ fn parse_input(input: &str) -> Result<u32, std::num::ParseIntError> {
     input.trim_end_matches('\n').trim().parse()
 }
 
+// Vectorized clear buffer function with 128-bit SSE2 instruction
+// Only works on x86_64 platform with SSE2 support
+#[inline(always)]
+fn clear_buf_fast(buf: &mut [u8]) {
+    unsafe {
+        asm!(
+            // Clear the upper part of the YMM register
+            // to avoid penalties from mixing AVX and legacy SSE instructions
+            // Altohugh we didn't use any AVX instructions, it's a good practice
+            // because we can't gurantee anywhere else in the code doesn't use AVX
+            "vzeroupper",
+            // Clear xmm0 register, because we want to wipe the buffer with 128 bits
+            "pxor xmm0, xmm0",
+            // Fill the whole buffer(128 bits) with SSE2 movdqu instruction
+            "movdqu [rdi], xmm0",
+            in("rdi") buf.as_mut_ptr(),
+            options(nostack, preserves_flags)
+        );
+    }
+}
+
 fn main() {
     println!("[!] Welcome to the Guess Game!");
     println!("[!] The secret number is between 1 and 100, exclusive.");
@@ -79,7 +99,8 @@ fn main() {
         // We didn't print a newline, so we need to flush stdout
         stdout().flush().expect("Failed to flush stdout!");
 
-        input_buf.fill(0); // clear the buffer
+        clear_buf_fast(&mut input_buf); // clear the buffer
+        // input_buf.fill(0); // slow path
 
         // restrict the scope of mutable borrow
         let read_bytes: usize;

@@ -1,7 +1,9 @@
 use core::str;
 use rand::Rng;
 use std::{
-    arch::asm, cmp::Ordering, io::{stdout, Read, Write}
+    arch::asm,
+    cmp::Ordering,
+    io::{stdout, Read, Write},
 };
 
 pub enum GuessResult {
@@ -100,22 +102,16 @@ fn main() {
         stdout().flush().expect("Failed to flush stdout!");
 
         clear_buf_fast(&mut input_buf); // clear the buffer
-        // input_buf.fill(0); // slow path
+                                        // input_buf.fill(0); // slow path
 
         // restrict the scope of mutable borrow
-        let read_bytes: usize;
-        {
-            // used for read_vectored. I want to leave at least 1 byte for null terminator
-            let mut buf_slice = [std::io::IoSliceMut::new(&mut input_buf[..15])];
+        let read_bytes = std::io::stdin()
+            .read(&mut input_buf)
+            // this fails usually when it's unable to open stdin, so panic is reasonable here
+            .expect("[!] Failed to read input!");
 
-            read_bytes = std::io::stdin()
-                .read_vectored(&mut buf_slice)
-                // this fails usually when it's unable to open stdin, so panic is reasonable here
-                .expect("[!] Failed to read input!");
-
-            debug_assert!(read_bytes > 0);
-            debug_assert!(read_bytes <= input_buf.len());
-        }
+        debug_assert!(read_bytes > 0);
+        debug_assert!(read_bytes <= input_buf.len());
 
         // also, avoids heap allocation, to improve performance
         let guess = match parse_input(unsafe { str::from_utf8_unchecked(&input_buf[..read_bytes]) })
